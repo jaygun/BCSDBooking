@@ -3,15 +3,16 @@ from scrapy import Request
 from scrapy.spiders.crawl import CrawlSpider, Rule
 from scrapy.linkextractors import LinkExtractor
 from datetime import datetime, timedelta
+from BCSDBooking.items import BcsdbookingItem
 import urllib
 import urlparse
 
-class BookingSpider(CrawlSpider):
+class InmateSpider(CrawlSpider):
 
     # Set date/time variables
     # ---
     now = datetime.today()
-    dateto = urllib.quote_plus(now.strftime("%m/%d/%Y"))
+    today = urllib.quote_plus(now.strftime("%m/%d/%Y"))
 
     # We can get a range of days - example to get yesterday
     # ---
@@ -22,11 +23,10 @@ class BookingSpider(CrawlSpider):
     # ---
     #past = now - timedelta(hours = 1)
     #datefrom = urllib.quote_plus(past.strftime('%m/%d/%Y %H:%M'))
-
+    
     name = "GetInmates"
     allowed_domains = ["inmate.co.buchanan.mo.us"]
-    start_urls = ["http://inmate.co.buchanan.mo.us/NewWorld.InmateInquiry/buchananco?BookingFromDate=" + dateto + "&BookingToDate=" + dateto]
-
+    start_urls = ["http://inmate.co.buchanan.mo.us/NewWorld.InmateInquiry/buchananco?BookingFromDate=" + today + "&BookingToDate=" + today]
     rules = (
         Rule(LinkExtractor(allow=(), restrict_xpaths=('//a[@class="Next"]',)), callback="parse_page", follow=True),
     )
@@ -40,12 +40,12 @@ class BookingSpider(CrawlSpider):
             yield Request(inmate_url, callback=self.parse_inmate)
 
     def parse_inmate(self, response):
-        yield {
-            'name': response.css('.FieldList .Name span::text').extract_first(),
-            'bookingdate': response.css('.Booking .BookingData .FieldList .BookingDate span::text').extract_first(),
-            'totalbondamount': response.css('.BookingData .FieldList .TotalBondAmount span::text').extract_first(),
-            'chargedescrption': response.css('.BookingData .BookingCharges .Grid tbody .ChargeDescription::text').extract(),
-            'offensedate': response.css('.BookingCharges .Grid tbody .OffenseDate::text').extract(),
-            'photo': urlparse.urljoin(response.url, response.css('.BookingPhotos a::attr(href)').extract_first()),
-            'sourceurl': response.url,
-        }
+            item = BcsdbookingItem()
+            item['inmate'] = response.css('.FieldList .Name span::text').extract_first()
+            item['bookingdate'] = response.css('.Booking .BookingData .FieldList .BookingDate span::text').extract_first()
+            item['totalbondamount'] = response.css('.BookingData .FieldList .TotalBondAmount span::text').extract_first(),
+            item['chargedescrption'] = response.css('.BookingData .BookingCharges .Grid tbody .ChargeDescription::text').extract(),
+            item['offensedate'] = response.css('.BookingCharges .Grid tbody .OffenseDate::text').extract(),
+            item['sourceurl'] = response.url,
+            item['image_urls'] = ["http://inmate.co.buchanan.mo.us/" + s for s in response.xpath('//div[@class="BookingPhotos"]/a/@href').extract()]
+            yield item
